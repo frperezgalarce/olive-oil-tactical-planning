@@ -229,7 +229,7 @@ def load_real_weather(
     ws2m2 = np.clip(ws2m, 0.0, None)
 
     X = np.stack([tmin2, tmax2, precip2, sw_dwn2, rh2m2, ws2m2], axis=-1).astype(np.float32)
-
+    df['DATE'].to_csv('dates_loaded.csv')
     # Handle n_days
     if n_days is None:
         return X, columns

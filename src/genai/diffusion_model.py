@@ -79,7 +79,8 @@ class TinyCondUNet1D(nn.Module):
         c = self.ctx_proj(c)              # (B, emb_dim)
 
         # time embedding + context
-        te = timestep_embedding(t, self.emb_dim)
+        #te = timestep_embedding(t, self.emb_dim)
+        te = timestep_embedding_with_seasonality(t, self.emb_dim)
         emb = self.time_mlp(te + c)
 
         x = x_t.transpose(1,2)  # (B, C, L)
@@ -126,6 +127,30 @@ class DiffusionSchedule:
         a = self.sqrt_alpha_bar[t].view(-1, 1, 1)
         b = self.sqrt_one_minus_alpha_bar[t].view(-1, 1, 1)
         return a * x0 + b * noise
+
+def timestep_embedding_with_seasonality(t, dim, period=365.0):
+    half = dim // 2 - 1  # reserve space
+    freqs = torch.exp(
+        -math.log(10000) * torch.arange(0, half, device=t.device).float() / (half - 1)
+    )
+
+    ang = t.float().unsqueeze(1) * freqs.unsqueeze(0)
+    emb = torch.cat([torch.sin(ang), torch.cos(ang)], dim=1)
+
+    # yearly cycle
+    omega_year = 2 * math.pi / period
+    yearly = torch.stack([
+        torch.sin(omega_year * t),
+        torch.cos(omega_year * t)
+    ], dim=1)
+
+    emb = torch.cat([emb, yearly], dim=1)
+
+    if emb.shape[1] < dim:
+        emb = F.pad(emb, (0, dim - emb.shape[1]))
+
+    return emb
+
 
 def timestep_embedding(t, dim):
     """
