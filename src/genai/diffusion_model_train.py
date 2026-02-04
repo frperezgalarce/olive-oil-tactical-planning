@@ -58,7 +58,22 @@ def train_one_epoch(opt, model, sched, device, train_loader, mean_t, std_t):
         x_t = sched.q_sample(tgt_s, t, noise=noise)
 
         pred = model(x_t, ctx_s, t)
-        loss = F.mse_loss(pred, noise)
+
+
+        # pred = eps_theta
+        loss_eps = F.mse_loss(pred, noise)
+
+        # x0_hat from eps-pred (same formula you use in generation)
+        a = sched.sqrt_alpha_bar[t].view(-1, 1, 1)
+        b = sched.sqrt_one_minus_alpha_bar[t].view(-1, 1, 1)
+        x0_hat = (x_t - b * pred) / (a + 1e-8)
+
+        # reconstruction loss (try smooth_l1 first)
+        loss_x0 = F.smooth_l1_loss(x0_hat, tgt_s)
+
+        lambda_x0 = 0.1  # start small: 0.05–0.2
+        loss = loss_eps + lambda_x0 * loss_x0
+
 
         opt.zero_grad()
         loss.backward()

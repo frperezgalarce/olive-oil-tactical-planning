@@ -17,6 +17,48 @@ def p_sample_loop(ctx, model, device, sched, HORIZON, VARS, mean_t, std_t, n_sce
 
     for ti in reversed(range(sched.T)):
         t = torch.full((n_scenarios,), ti, device=device, dtype=torch.long)
+        eps = model(x, ctx_s.repeat(n_scenarios, 1, 1), t)
+
+        # Predict x0 (eps-parameterization)
+        x0_hat = (x - sched.sqrt_one_minus_alpha_bar[ti] * eps) / (sched.sqrt_alpha_bar[ti] + 1e-8)
+
+        # Optional stabilization (often helps calibration)
+        # x0_hat = torch.clamp(x0_hat, -3.0, 3.0)
+
+        # Posterior mean: mu = c1*x0_hat + c2*x
+        c1 = sched.posterior_mean_coef1[ti]
+        c2 = sched.posterior_mean_coef2[ti]
+        mean = c1 * x0_hat + c2 * x
+
+        if ti > 0:
+            z = torch.randn_like(x)
+            var = sched.posterior_variance[ti]   # <-- beta_tilde
+            x = mean + torch.sqrt(var) * z
+        else:
+            x = mean
+
+    samples = unstandardize(x, mean_t, std_t)
+
+    # Keep precipitation non-negative (your indexing is correct here)
+    samples[..., 3] = torch.clamp(samples[..., 3], min=0.0)
+    return samples.detach().cpu()
+
+@torch.no_grad()
+def p_sample_loop_old(ctx, model, device, sched, HORIZON, VARS, mean_t, std_t, n_scenarios=10):
+    """
+    ctx: (1, 60, 4) raw scale tensor
+    returns: (n_scenarios, 60, 4) raw scale scenarios
+    """
+    model.eval()
+
+    ctx = ctx.to(device)
+    ctx_s = standardize(ctx, mean_t, std_t)
+
+    # Start from pure noise
+    x = torch.randn((n_scenarios, HORIZON, VARS), device=device)
+
+    for ti in reversed(range(sched.T)):
+        t = torch.full((n_scenarios,), ti, device=device, dtype=torch.long)
         eps = model(x, ctx_s.repeat(n_scenarios,1,1), t)
 
         beta = sched.betas[ti]
@@ -40,4 +82,5 @@ def p_sample_loop(ctx, model, device, sched, HORIZON, VARS, mean_t, std_t, n_sce
     samples = unstandardize(x, mean_t, std_t)
     # Keep precipitation non-negative
     samples[..., 3] = torch.clamp(samples[..., 3], min=0.0)
+    
     return samples.detach().cpu()

@@ -1,0 +1,66 @@
+{
+  "PlantD": 1600.0,
+  "PlantA": 6.25,
+  "LAD": 2.0,
+
+  "phenology_chill_model": "unichill",
+  "phenology_forcing_model": "logistic",
+
+  "tb_budbreak": 8.5,
+
+  "chill_a": 0.01,
+  "chill_b": -0.5,
+  "chill_c": 7.2,
+  "Ccrit": 350.0,
+
+  "forcing_d": 0.5,
+  "forcing_e": 9.0,
+  "FcritFlo": 450.0,
+
+  "T_opt_chill_alt": 7.2,
+  "T_max_chill_alt": 16.0,
+  "Tb_forcing_alt": 9.0,
+
+  "RUE_ol": 0.98,
+  "SLA_ol": 5.2,
+  "HI_pot_base": 0.35,
+
+  "harvest_doy": 120,
+  "PClf_pot_base": 0.18,
+
+  "Ck1": 0.52,
+  "Ck2": 0.000788,
+  "Ck3": 0.76,
+  "Ck4": 1.25,
+
+  "TTSW1": 70.0,
+  "TTSW2": 110.0,
+  "Initial_Saturation": 0.9,
+
+  "root_frac_layer1": 0.3333333333333333,
+  "root_frac_layer2": 0.6666666666666666,
+
+  "RelTr_a": 6.17,
+  "RelTr_b": 13.45,
+  "RelLAI_a": 78.24,
+  "RelLAI_b": 21.42,
+
+  "TE_coeff": 4.0,
+
+  "Irrigation_Threshold": 0.2,
+  "Irrigation_Efficiency": 0.95,
+
+  "SALB": 0.2,
+  "gamma_kpa": 0.68,
+
+  "FTSWo": 0.4,
+  "FTSWm": 0.05,
+
+  "TMAXo": 30.0,
+  "TMAXm": 40.0,
+
+  "anthesis_window_days": 7,
+  "fresh_factor": 2.2,
+
+  "LAI_ini": 3.5
+}

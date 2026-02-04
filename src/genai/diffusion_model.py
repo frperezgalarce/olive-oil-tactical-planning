@@ -12,18 +12,29 @@ class ResBlock1D(nn.Module):
         self.conv1 = nn.Conv1d(in_ch, out_ch, 3, padding=1)
         self.norm2 = nn.GroupNorm(8, out_ch)
         self.conv2 = nn.Conv1d(out_ch, out_ch, 3, padding=1)
-        self.emb_proj = nn.Linear(emb_dim, out_ch)
+        
+        # self.emb_proj = nn.Linear(emb_dim, out_ch)
+        self.emb_proj = nn.Linear(emb_dim, 2 * out_ch)
+
         self.skip = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
 
     def forward(self, x, emb):
-        # x: (B, C, L), emb: (B, emb_dim)
         h = self.conv1(F.silu(self.norm1(x)))
-        h = h + self.emb_proj(F.silu(emb)).unsqueeze(-1)
+
+        # FiLM conditioning
+        emb_out = self.emb_proj(F.silu(emb))          # (B, 2*out_ch)
+        gamma, beta = emb_out.chunk(2, dim=1)         # each (B, out_ch)
+
+        gamma = gamma.unsqueeze(-1)                   # (B, out_ch, 1)
+        beta  = beta.unsqueeze(-1)
+
+        h = h * (1 + gamma) + beta                    # FiLM
+
         h = self.conv2(F.silu(self.norm2(h)))
         return h + self.skip(x)
 
 class TinyCondUNet1D(nn.Module):
-    def __init__(self, in_vars=4, ctx_vars=4, base=64, emb_dim=128):
+    def __init__(self, in_vars=4, ctx_vars=4, base=128, emb_dim=256):
         """
         Model predicts noise eps for target sequence.
         Inputs:
@@ -41,9 +52,18 @@ class TinyCondUNet1D(nn.Module):
         # ctx encoder (simple)
         self.ctx_conv1 = nn.Conv1d(ctx_vars, base, 5, padding=2)
         self.ctx_conv2 = nn.Conv1d(base, base, 5, padding=2)
-        self.ctx_pool = nn.AdaptiveAvgPool1d(1)
+        
+        self.ctx_attn = nn.Sequential(
+            nn.Conv1d(base, base, 1),
+            nn.SiLU(),
+            nn.Conv1d(base, 1, 1)  # attention logits over time
+        )
+
+
         self.ctx_proj = nn.Linear(base, emb_dim)
 
+        self.pos_proj = nn.Conv1d(emb_dim, base, 1)
+        
         self.time_mlp = nn.Sequential(
             nn.Linear(emb_dim, emb_dim),
             nn.SiLU(),
@@ -75,16 +95,28 @@ class TinyCondUNet1D(nn.Module):
         c = ctx.transpose(1,2)  # (B, Cctx, Lctx)
         c = F.silu(self.ctx_conv1(c))
         c = F.silu(self.ctx_conv2(c))
-        c = self.ctx_pool(c).squeeze(-1)  # (B, base)
+        
+        
+        w = self.ctx_attn(c)                # (B,1,Lctx)
+        w = torch.softmax(w, dim=-1)
+        c = (c * w).sum(dim=-1)             # (B, base)
+
         c = self.ctx_proj(c)              # (B, emb_dim)
 
         # time embedding + context
-        #te = timestep_embedding(t, self.emb_dim)
-        te = timestep_embedding_with_seasonality(t, self.emb_dim)
+        te = timestep_embedding(t, self.emb_dim)
+        #te = timestep_embedding_with_seasonality(t, self.emb_dim)
         emb = self.time_mlp(te + c)
 
         x = x_t.transpose(1,2)  # (B, C, L)
         x0 = self.in_conv(x)
+
+        # Lead-time / position embedding (0..L-1)
+        pos = torch.arange(L, device=x_t.device).long().unsqueeze(0).repeat(B, 1)   # (B, L)
+        pos_emb = timestep_embedding(pos.reshape(-1), self.emb_dim).view(B, L, self.emb_dim)  # (B,L,emb_dim)
+        pos_emb = pos_emb.transpose(1, 2)  # (B, emb_dim, L)
+
+        x0 = x0 + self.pos_proj(pos_emb)   # (B, base, L)
 
         h1 = self.rb1(x0, emb)
         h2 = self.down(h1)
@@ -100,6 +132,7 @@ class TinyCondUNet1D(nn.Module):
         u = self.rb3(u, emb)
 
         out = self.out_conv(F.silu(self.out_norm(u)))
+
         return out.transpose(1,2)  # (B, L, C)
     
 class DiffusionSchedule:
@@ -115,6 +148,20 @@ class DiffusionSchedule:
 
         self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
         self.sqrt_one_minus_alpha_bar = torch.sqrt(1.0 - self.alpha_bar)
+
+        # After computing: betas, alphas, alpha_bar
+        alpha_bar_prev = torch.cat([torch.ones(1, device=device), alpha_bar[:-1]], dim=0)
+
+        self.alpha_bar_prev = alpha_bar_prev
+
+        # Posterior variance: beta_tilde
+        self.posterior_variance = betas * (1.0 - alpha_bar_prev) / (1.0 - alpha_bar)
+        self.posterior_log_variance_clipped = torch.log(torch.clamp(self.posterior_variance, min=1e-20))
+
+        # Posterior mean coefficients:
+        self.posterior_mean_coef1 = betas * torch.sqrt(alpha_bar_prev) / (1.0 - alpha_bar)
+        self.posterior_mean_coef2 = (1.0 - alpha_bar_prev) * torch.sqrt(alphas) / (1.0 - alpha_bar)
+
 
     def q_sample(self, x0, t, noise=None):
         """

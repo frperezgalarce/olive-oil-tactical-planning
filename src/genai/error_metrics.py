@@ -50,18 +50,17 @@ def crps_ensemble_snd(Omega_all, y_all, average=False):
     crps = term1 - 0.5 * mean_abs_pair
     return float(np.mean(crps)) if average else crps
 
-
-
 def mse_ensemble_mean_batch(Omega_all, y_all):
     yhat = Omega_all.mean(axis=0)  # (N,H,D)
+    yhat = np.array(yhat)
+    y_all = np.array(y_all)
     return np.mean((yhat - y_all) ** 2, axis=0)
 
 
 def mae_ensemble_mean_batch(Omega_all, y_all, idx=0, h=0, d=None):
     yhat = Omega_all.mean(axis=0)  
-    
-    print('yhat:', yhat[0])
-    
+    yhat = np.array(yhat)
+    y_all = np.array(y_all)
     return np.mean(np.abs(yhat - y_all), axis=0)
 
 def mape_ensemble_mean_batch(Omega_all, y_all, eps=1e-8):

@@ -5,22 +5,91 @@ import torch
 
 
 def plot_ctx_and_scenarios_panel(
-    dataset,
-    i,
+    ctx,
+    tgt,
     scens,
     feature_names=None,
-    max_scen_to_plot=10
+    max_scen_to_plot=10,
+    sample_id=None,
 ):
-    """
-    Panel plot (one subplot per variable, shared time axis):
-      - Context: plotted on [0, CTX-1]
-      - Scenarios: plotted on [CTX, CTX+H-1] (thin lines)
-      - True target: plotted on [CTX, CTX+H-1] (thick line)
-    """
-    ctx, tgt = dataset[i]  # ctx: (CTX, D), tgt: (H, D) torch tensors
+    # torch -> numpy (robust)
+    if hasattr(ctx, "detach"):
+        ctx = ctx.detach().cpu().numpy()[0]
+    else:
+        ctx = np.asarray(ctx)
 
-    ctx = ctx.detach().cpu().numpy()
-    tgt = tgt.detach().cpu().numpy()
+    if hasattr(tgt, "detach"):
+        tgt = tgt.detach().cpu().numpy()
+    else:
+        tgt = np.asarray(tgt)
+
+    CTX, D = ctx.shape
+    print(tgt.shape)
+    H = tgt.shape[0]
+
+    scens = np.asarray(scens)
+    assert scens.ndim == 3, "scens must have shape (n_scenarios, H, D)"
+    assert scens.shape[1] == H, f"scens horizon {scens.shape[1]} != target horizon {H}"
+    assert scens.shape[2] == D, f"scens vars {scens.shape[2]} != target vars {D}"
+
+    if feature_names is None:
+        feature_names = [f"var_{k}" for k in range(D)]
+    else:
+        assert len(feature_names) == D, "feature_names length must match D"
+
+    n_plot = min(max_scen_to_plot, scens.shape[0])
+
+    t_ctx = np.arange(0, CTX)
+    t_hor = np.arange(CTX, CTX + H)
+
+    fig, axes = plt.subplots(D, 1, figsize=(12, 2.2 * D), sharex=True)
+    if D == 1:
+        axes = [axes]
+
+    split_x = CTX - 0.5  # boundary between context and forecast
+
+    for k, ax in enumerate(axes):
+        ax.plot(t_ctx, ctx[:, k], label="context", linewidth=2.2)
+
+        for s in range(n_plot):
+            ax.plot(t_hor, scens[s, :, k], alpha=0.35, linewidth=1.0)
+
+        ax.plot(t_hor, tgt[:, k], label="true target", linewidth=2.2)
+
+        ax.axvline(split_x, linestyle="--", linewidth=1)
+        ax.set_ylabel(feature_names[k])
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
+
+        if k == 0:
+            ax.legend(loc="upper right")
+
+    axes[-1].set_xlabel("Time (days, relative)")
+    prefix = "" if sample_id is None else f"Sample i={sample_id}: "
+    fig.suptitle(f"{prefix}context + scenarios vs true target", fontsize=12)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+    
+def plot_ctx_and_scenarios_panel_ci(
+    ctx,
+    tgt,
+    scens,
+    feature_names=None,
+    max_scen_to_plot=0,
+    center="mean",          # "mean" or "median"
+    ci=(0.05, 0.95),        # quantiles
+    show_minmax=False,
+    sample_id=None,
+):
+    # torch -> numpy (robust)
+    if hasattr(ctx, "detach"):
+        ctx = ctx.detach().cpu().numpy()[0]
+    else:
+        ctx = np.asarray(ctx)
+
+    if hasattr(tgt, "detach"):
+        tgt = tgt.detach().cpu().numpy()
+    else:
+        tgt = np.asarray(tgt)
 
     CTX, D = ctx.shape
     H = tgt.shape[0]
@@ -32,34 +101,64 @@ def plot_ctx_and_scenarios_panel(
 
     if feature_names is None:
         feature_names = [f"var_{k}" for k in range(D)]
+    else:
+        assert len(feature_names) == D, "feature_names length must match D"
 
-    n_plot = min(max_scen_to_plot, scens.shape[0])
+    n_scen = scens.shape[0]
+    n_plot = min(max_scen_to_plot, n_scen)
 
     t_ctx = np.arange(0, CTX)
     t_hor = np.arange(CTX, CTX + H)
 
-    fig, axes = plt.subplots(
-        nrows=D,
-        ncols=1,
-        figsize=(12, 2.2 * D),
-        sharex=True
-    )
+    if center == "mean":
+        central = np.mean(scens, axis=0)
+    elif center == "median":
+        central = np.median(scens, axis=0)
+    else:
+        raise ValueError("center must be 'mean' or 'median'")
 
+    q_low, q_high = ci
+    lo = np.quantile(scens, q_low, axis=0)
+    hi = np.quantile(scens, q_high, axis=0)
+
+    if show_minmax:
+        mn = np.min(scens, axis=0)
+        mx = np.max(scens, axis=0)
+
+    fig, axes = plt.subplots(D, 1, figsize=(12, 2.2 * D), sharex=True)
     if D == 1:
         axes = [axes]
 
+    split_x = CTX - 0.5
+
     for k, ax in enumerate(axes):
-        # Context
         ax.plot(t_ctx, ctx[:, k], label="context", linewidth=2.2)
 
-        # Scenarios (thin) + true target (thick)
         for s in range(n_plot):
-            ax.plot(t_hor, scens[s, :, k], alpha=0.35, linewidth=1.0)
+            ax.plot(t_hor, scens[s, :, k], alpha=0.25, linewidth=0.9)
+
+        ax.fill_between(
+            t_hor, lo[:, k], hi[:, k],
+            alpha=0.25,
+            label=f"CI {int(q_low*100)}–{int(q_high*100)}%" if k == 0 else None
+        )
+
+        if show_minmax:
+            ax.fill_between(
+                t_hor, mn[:, k], mx[:, k],
+                alpha=0.12,
+                label="min–max" if k == 0 else None
+            )
+
+        ax.plot(
+            t_hor, central[:, k],
+            linewidth=2.2,
+            label=f"{center} forecast" if k == 0 else None
+        )
+
         ax.plot(t_hor, tgt[:, k], label="true target", linewidth=2.2)
 
-        # Split marker
-        ax.axvline(CTX - 1, linestyle="--", linewidth=1)
-
+        ax.axvline(split_x, linestyle="--", linewidth=1)
         ax.set_ylabel(feature_names[k])
         ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
 
@@ -67,10 +166,11 @@ def plot_ctx_and_scenarios_panel(
             ax.legend(loc="upper right")
 
     axes[-1].set_xlabel("Time (days, relative)")
-    fig.suptitle(f"Sample i={i}: context + scenarios vs true target", fontsize=12)
+    prefix = "" if sample_id is None else f"Sample i={sample_id}: "
+    fig.suptitle(f"{prefix}context + {center} + CI vs true target", fontsize=12)
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
-    
+
 def plot_weatherpair_sample(dataset, i=0, feature_names=None):
     """
     Visualize one (ctx -> tgt) sample from WeatherPairs.
