@@ -1,6 +1,38 @@
 import numpy as np
 import torch
 
+
+def crps_ensemble_mc(Omega_all, y_all, average=False, n_pairs=256, seed=0, dtype=None):
+    """
+    Approximate CRPS by Monte Carlo for the pairwise term.
+    Exact term1, MC estimate for term2.
+    """
+    rng = np.random.default_rng(seed)
+    X = np.asarray(Omega_all)
+    if X.ndim != 3:
+        raise ValueError(f"Omega_all must be (S,N,D). Got {X.shape}")
+    S, N, D = X.shape
+
+    y = np.asarray(y_all)
+    if y.ndim == 1:
+        y = y[:, None]
+    if y.shape != (N, D):
+        raise ValueError(f"y_all must be (N,D)={(N,D)} or (N,). Got {y.shape}")
+
+    if dtype is not None:
+        X = X.astype(dtype, copy=False)
+        y = y.astype(dtype, copy=False)
+
+    term1 = np.mean(np.abs(X - y[None, :, :]), axis=0)  # (N,D)
+
+    i = rng.integers(0, S, size=n_pairs)
+    j = rng.integers(0, S, size=n_pairs)
+    # MC estimate of E|X - X'|
+    term2 = np.mean(np.abs(X[i] - X[j]), axis=0)  # (N,D)
+
+    crps = term1 - 0.5 * term2
+    return float(crps.mean()) if average else crps
+
 def crps_ensemble_snd(Omega_all, y_all, average=False):
     """
     Empirical-ensemble CRPS.
@@ -49,6 +81,21 @@ def crps_ensemble_snd(Omega_all, y_all, average=False):
 
     crps = term1 - 0.5 * mean_abs_pair
     return float(np.mean(crps)) if average else crps
+
+
+def mse_ensemble_mean_batch_fast(Omega_all, y_all, average=True):
+    X = np.asarray(Omega_all)
+    y = np.asarray(y_all)
+    yhat = X.mean(axis=0)  # (N,H,D) or (N,D) depending on your data
+    err2 = (yhat - y) ** 2
+    return float(err2.mean()) if average else err2.mean(axis=0)
+
+def mae_ensemble_mean_batch_fast(Omega_all, y_all, average=True):
+    X = np.asarray(Omega_all)
+    y = np.asarray(y_all)
+    yhat = X.mean(axis=0)
+    ae = np.abs(yhat - y)
+    return float(ae.mean()) if average else ae.mean(axis=0)
 
 def mse_ensemble_mean_batch(Omega_all, y_all):
     yhat = Omega_all.mean(axis=0)  # (N,H,D)
