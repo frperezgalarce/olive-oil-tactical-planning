@@ -72,7 +72,7 @@ class OliveHarvestDataFromJSON:
 
         # UC_k : JSON "C" is 0-based list; k are 1..max(K)
         self.UC: Dict[int, float] = {k: float(raw["C"][k - 1]) for k in self.K}
-
+        
         # OC_{j,t}: AA is |J| x |T|
         self.OC: Dict[Any, Dict[int, float]] = {
             j: {t: float(raw["AA"][j_pos[j]][t - 1]) for t in self.T}

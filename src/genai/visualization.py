@@ -215,6 +215,7 @@ def visualize_loss(EPOCHS, train_hist, val_hist):
     plt.legend()
     plt.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
     plt.tight_layout()
+    plt.savefig("training_validation_plot.png")
     plt.show()
 
 def plot_weatherpair_panel(dataset, i=0, feature_names=None):
