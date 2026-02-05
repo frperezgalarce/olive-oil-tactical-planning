@@ -2,35 +2,163 @@ import numpy as np
 import math
 import pandas as pd
 # --- Yield Parameters ---
-CRUE = 0.135       # [g/MJ] Biomass RUE (total solar), adapted from literature
-CHI = 0.3        # [unitless] Olive Harvest Index (Dry Fruit / Total Biomass)
-CCh = CRUE * CHI # [g(yield)/MJ] Composite Crop Coefficient (0.3)
+# ============================================================
+# Olive biomass / yield parameters (Chile, near Talca)
+# Each line keeps: updated value + (orig value) + validation source
+# ============================================================
+
+# --- Yield Parameters ---
+CRUE = 0.41
+# [g DM / MJ global solar Rs]
+# Updated: 0.41  (orig: 0.135)
+# Source (olive RUE on intercepted PAR): Villalobos et al. (2006), Eur. J. Agron. 24:296–303.
+#   doi:10.1016/j.eja.2005.10.008  (reports avg RUE ≈ 0.86 g DM / MJ intercepted PAR)
+# Source (PAR fraction): Kobayashi et al. (2004), Remote Sensing of Environment 90:209–224
+#   https://doi.org/10.1016/j.rse.2004.01.001  (PAR ≈ 0.48 of global solar Rs)
+# Conversion used: 0.86 * 0.48 ≈ 0.41 g DM / MJ Rs
+
+CHI = 0.52
+# [unitless] Harvest Index (dry fruit / total above-ground biomass)
+# Updated: 0.52  (orig: 0.30)
+# Source: Villalobos et al. (2006), doi:10.1016/j.eja.2005.10.008
+#   (paper reports HI predictions ≈ 0.51–0.55 and fruit partition coefficient ≈ 0.50)
+
+CCh = CRUE * CHI
+# [g(yield) / MJ Rs]
+# Updated: ≈ 0.213  (orig: 0.0405 = 0.135*0.30)
+# Source: derived from updated CRUE and CHI (see sources above)
+
 
 # --- Phenology & Temperature ---
-fSolarmax = 0.90   # [unitless] Max fraction of radiation intercepted
-I50A = 492         # [°C·day] GDD for canopy closure at 50%
-I50B = 145         # [°C·day] GDD from senescence start to Tsum
-Tsum = 2000        # [°C·day] GDD required for harvest (Flowering->Harvest)
-Tbase = 9          # [°C] Baseline temperature for olive growth
-Topt = 25          # [°C] Optimal temperature
-Theat = 35         # [°C] Temperature above which heat stress begins
-Textreme = 45      # [°C] Temperature at which growth stops
+fSolarmax = 0.90
+# [unitless] Max fraction of radiation intercepted
+# Updated: 0.90 (orig: 0.90; kept)
+# Validation: full canopies in orchard systems can approach ~0.85–0.95 interception under dense cover;
+# confirm via local LAI/cover calibration. (Model structure follows Beer–Lambert interception as in Villalobos et al., 2006)
+#   doi:10.1016/j.eja.2005.10.008
+
+I50A = 492
+# [°C·day] GDD for canopy closure at 50%
+# Updated: 492 (orig: 492; kept)
+# Validation: model-calibration parameter (no universal olive constant). Refit using local LAI/cover vs time (Talca orchard).
+
+I50B = 145
+# [°C·day] GDD from senescence start to Tsum
+# Updated: 145 (orig: 145; kept)
+# Validation: model-calibration parameter; refit using observed seasonal decline in interception/LAI.
+
+Tsum = 2390
+# [°C·day] GDD required for harvest/maturity timing (model timebase-dependent)
+# Updated: 2390 (orig: 2000)
+# Validation: Garrido et al. (2020) discusses ≈2390 GDD associated with the olive cycle and maturation timing
+#   https://doi.org/10.1007/s10453-020-09659-3
+# NOTE: This is a starting point; because your TT accumulation definition (start date) is model-specific,
+#       you should recheck Tsum against observed flowering→harvest (or start→harvest) dates in Talca.
+
+Tbase = 9
+# [°C] Baseline temperature for olive growth / GDD accumulation
+# Updated: 9 (orig: 9; kept)
+# Validation: Olive phenology models report base temperatures in the ~7–10°C range depending on phase/model;
+# e.g., review/phenology sources discuss multiple Tb choices (including ~9°C) for olive development.
+#   (example discussion): https://www.ishs.org/ishs-article/1179_80
+
+Topt = 25
+# [°C] Optimal temperature (growth / photosynthesis envelope)
+# Updated: 25 (orig: 25; kept)
+# Validation: Olive ecophysiology references often place optimal growth range roughly within ~15–25°C (cultivar/site dependent).
+#   Ozturk et al. (2021), Agronomy 11(2):295
+#   https://doi.org/10.3390/agronomy11020295
+
+Theat = 35
+# [°C] Temperature above which heat stress begins
+# Updated: 35 (orig: 35; kept)
+# Validation: Olive vegetative growth inhibition reported when air temperatures exceed ~35°C.
+#   Benlloch-Gonzalez et al. (2016), Theor. Exp. Plant Physiol.
+#   https://doi.org/10.1007/s40626-016-0084-2
+
+Textreme = 45
+# [°C] Temperature at which growth stops (hard cutoff in model)
+# Updated: 45 (orig: 45; kept)
+# Validation: agronomic/technical references describe severe impairment at >40°C and extreme conditions approaching ~45°C.
+#   Olive4Climate (technical handbook): https://www.olive4climate.eu/wp-content/uploads/2019/06/Handbook-Changes-in-growing-conditions.pdf
+
 
 # --- Water & Soil ---
-Swater = 0.6               # [unitless] RUE sensitivity to drought
-critical_depletion = 80    # [mm] RAW: Threshold for stress (Irrigation Trigger)
-critical_water = 160       # [mm] TAW: Max water storage (Total Available Water)
-p = 0.5                    # [unitless] Depletion factor
+Swater = 0.6
+# [unitless] RUE sensitivity to drought (model stress-shape parameter)
+# Updated: 0.6 (orig: 0.6; kept)
+# Validation: not a FAO fixed constant; calibrate against local yield/biomass vs water-stress data.
+# Useful background on olive yield response to water deficits: Moriana et al. (2003), JASHS 128:425–431
+#   https://journals.ashs.org/downloadpdf/view/journals/jashs/128/3/article-p425.pdf
+
+critical_water = 160
+# [mm] TAW: Total Available Water in root zone
+# Updated: 160 (orig: 160; kept; site-specific)
+# Validation: compute from soil FC, WP and effective rooting depth (FAO-56 water-balance concepts).
+#   FAO-56: https://www.fao.org/4/x0490e/x0490e00.htm
+
+p = 0.65
+# [unitless] Depletion factor (fraction of TAW that can be depleted before stress)
+# Updated: 0.65 (orig: 0.5)
+# Validation: olive irrigation scheduling studies commonly adopt p≈0.65 under FAO-style water balance.
+# Example source: Cleveland & Ziogas (2017) includes p = 0.65 for olive.
+#   https://www.athensjournals.gr/agr/2017-4-4-2-Cleveland.pdf
+# (Concept/definition of p and RAW: FAO-56, Allen et al., 1998) https://www.fao.org/4/x0490e/x0490e00.htm
+
+critical_depletion = int(round(p * critical_water))
+# [mm] RAW threshold for stress / irrigation trigger (depletion at which stress begins)
+# Updated: 104 (orig: 80)
+# Validation: RAW = p * TAW (FAO-56 definition) + p value source above (Cleveland & Ziogas, 2017; FAO-56)
+
 
 # --- Environmental & Site ---
-SCO2 = 1.0       # [unitless] CRITICAL: Neutralized CO2 multiplier
-alfa = 0.23      # [unitless] Surface albedo
-SIGMA = 4.903e-9 # [W·m⁻²·K⁻⁴] Stefan-Boltzmann constant
-Altitude = 150     # [m] Elevation for Siracusa, Chile
-n = 2.45         # [mol/mol]
-E = 0.622        # [unitless]
-Cp = 1.013 / 1000  # [MJ/kg·°C]
-G = 0            # [MJ/m²/day] Soil heat flux
+SCO2 = 1.0
+# [unitless] CO2 multiplier
+# Updated: 1.0 (orig: 1.0; kept)
+# Validation: baseline ambient-CO2 assumption; only change if explicitly modeling CO2 fertilization.
+
+alfa = 0.23
+# [unitless] Surface albedo
+# Updated: 0.23 (orig: 0.23; kept)
+# Validation: FAO Penman–Monteith reference albedo for the reference surface and typical crop surfaces.
+#   FAO-56: https://www.fao.org/4/x0490e/x0490e00.htm
+
+SIGMA = 4.903e-9
+# [MJ K^-4 m^-2 day^-1] Stefan–Boltzmann constant in FAO-56 units (often shown as 4.903×10^-9)
+# Updated: 4.903e-9 (orig: 4.903e-9; kept)
+# Validation: FAO-56 longwave radiation equation constant
+#   FAO-56: https://www.fao.org/4/x0490e/x0490e00.htm
+
+Altitude = 102
+# [m] Elevation near Talca (Chile)
+# Updated: 102 (orig: 150)
+# Validation: Talca elevation ≈102 m a.s.l. (reference)
+#   https://en.wikipedia.org/wiki/Talca
+
+n = 2.45
+# [MJ/kg] Latent heat of vaporization (lambda)
+# Updated: 2.45 (orig: 2.45; kept)
+# Validation: FAO-56 constants
+#   https://www.fao.org/4/x0490e/x0490e00.htm
+
+E = 0.622
+# [unitless] Ratio molecular weight of water vapour/dry air
+# Updated: 0.622 (orig: 0.622; kept)
+# Validation: FAO-56 constants
+#   https://www.fao.org/4/x0490e/x0490e00.htm
+
+Cp = 1.013 / 1000
+# [MJ/kg·°C] Specific heat of moist air (≈1.013 kJ/kg°C)
+# Updated: 0.001013 (orig: 0.001013; kept)
+# Validation: FAO-56 constants
+#   https://www.fao.org/4/x0490e/x0490e00.htm
+
+G = 0
+# [MJ/m²/day] Soil heat flux (daily timestep often approximated as ~0)
+# Updated: 0 (orig: 0; kept)
+# Validation: FAO-56 daily soil heat flux assumption
+#   https://www.fao.org/4/x0490e/x0490e00.htm
+
 
 
 def eq1_gdh_daily(Tavg, tb):
