@@ -71,8 +71,8 @@ def train_one_epoch(opt, model, sched, device, train_loader, mean_t, std_t):
         # reconstruction loss (try smooth_l1 first)
         loss_x0 = F.smooth_l1_loss(x0_hat, tgt_s)
 
-        lambda_x0 = 0.5  # start small: 0.05–0.2
-        loss = loss_eps + lambda_x0 * loss_x0
+        lambda_x0 = 0.8  # start small: 0.05–0.2
+        loss = (1-lambda_x0)*loss_eps + lambda_x0 * loss_x0
 
 
         opt.zero_grad()

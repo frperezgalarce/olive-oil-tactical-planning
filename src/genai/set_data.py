@@ -107,7 +107,7 @@ def simulate_weather(n_days=6000, year_period=365, p_wet_base=0.25):
 
 def load_real_weather(
     csv_path: str,
-    columns = ["T2M_MIN", "T2M_MAX", "PRECTOTCORR", "ALLSKY_SFC_SW_DWN", "RH2M", "WS2M"],
+    columns = ["T2M_MIN", "T2M_MAX", "PRECTOTCORR", "ALLSKY_SFC_SW_DWN", "RH2M", "WS2M", "MONTH"],
     n_days: int | None = None,
     lat: float | None = None,
     lon: float | None = None,
@@ -217,7 +217,7 @@ def load_real_weather(
     sw_dwn = df["ALLSKY_SFC_SW_DWN"].astype(float).to_numpy()
     rh2m = df["RH2M"].astype(float).to_numpy()
     ws2m = df["WS2M"].astype(float).to_numpy()
-
+    month = df["DATE"].dt.month.astype(float).to_numpy()
 
     
     # Enforce ordering and basic sanity
@@ -228,7 +228,7 @@ def load_real_weather(
     rh2m2 = np.clip(rh2m, 0.0, 100.0)
     ws2m2 = np.clip(ws2m, 0.0, None)
 
-    X = np.stack([tmin2, tmax2, precip2, sw_dwn2, rh2m2, ws2m2], axis=-1).astype(np.float32)
+    X = np.stack([tmin2, tmax2, precip2, sw_dwn2, rh2m2, ws2m2, month], axis=-1).astype(np.float32)
     print(df.sample(5))
     df['DATE'].to_csv('dates_loaded.csv')
     # Handle n_days
