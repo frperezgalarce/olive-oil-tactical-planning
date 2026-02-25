@@ -50,8 +50,8 @@ class TinyCondUNet1D(nn.Module):
         self.emb_dim = emb_dim
 
         # ctx encoder (simple)
-        self.ctx_conv1 = nn.Conv1d(ctx_vars, base, 5, padding=2)
-        self.ctx_conv2 = nn.Conv1d(base, base, 5, padding=2)
+        self.ctx_conv1 = nn.Conv1d(ctx_vars, base, 21, padding=2)
+        self.ctx_conv2 = nn.Conv1d(base, base, 21, padding=2)
         
         self.ctx_attn = nn.Sequential(
             nn.Conv1d(base, base, 1),
@@ -136,32 +136,27 @@ class TinyCondUNet1D(nn.Module):
         return out.transpose(1,2)  # (B, L, C)
     
 class DiffusionSchedule:
-    def __init__(self, T=200, beta_start=1e-4, beta_end=0.02):
-        self.T = T
-        betas = torch.linspace(beta_start, beta_end, T, dtype=torch.float32)
-        alphas = 1.0 - betas
-        alpha_bar = torch.cumprod(alphas, dim=0)
+    def __init__(self, T=200, beta_start=1e-4, beta_end=0.02, device=None, dtype=torch.float32):
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.betas = betas.to(device)
-        self.alphas = alphas.to(device)
-        self.alpha_bar = alpha_bar.to(device)
+        self.T = T
+        self.device = device
+
+        self.betas = torch.linspace(beta_start, beta_end, T, device=device, dtype=dtype)
+        self.alphas = 1.0 - self.betas
+        self.alpha_bar = torch.cumprod(self.alphas, dim=0)
 
         self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
         self.sqrt_one_minus_alpha_bar = torch.sqrt(1.0 - self.alpha_bar)
 
-        # After computing: betas, alphas, alpha_bar
-        alpha_bar_prev = torch.cat([torch.ones(1, device=device), alpha_bar[:-1]], dim=0)
+        self.alpha_bar_prev = torch.cat([torch.ones_like(self.alpha_bar[:1]), self.alpha_bar[:-1]], dim=0)
 
-        self.alpha_bar_prev = alpha_bar_prev
-
-        # Posterior variance: beta_tilde
-        self.posterior_variance = betas * (1.0 - alpha_bar_prev) / (1.0 - alpha_bar)
+        self.posterior_variance = self.betas * (1.0 - self.alpha_bar_prev) / (1.0 - self.alpha_bar)
         self.posterior_log_variance_clipped = torch.log(torch.clamp(self.posterior_variance, min=1e-20))
 
-        # Posterior mean coefficients:
-        self.posterior_mean_coef1 = betas * torch.sqrt(alpha_bar_prev) / (1.0 - alpha_bar)
-        self.posterior_mean_coef2 = (1.0 - alpha_bar_prev) * torch.sqrt(alphas) / (1.0 - alpha_bar)
-
+        self.posterior_mean_coef1 = self.betas * torch.sqrt(self.alpha_bar_prev) / (1.0 - self.alpha_bar)
+        self.posterior_mean_coef2 = (1.0 - self.alpha_bar_prev) * torch.sqrt(self.alphas) / (1.0 - self.alpha_bar)
 
     def q_sample(self, x0, t, noise=None):
         """
