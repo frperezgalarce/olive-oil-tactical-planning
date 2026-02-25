@@ -5,7 +5,7 @@ Each updated item keeps the **original value** and includes a **validation sourc
 
 > **Important unit note (RUE):**
 > - `RUE_ol` is intended for **intercepted PAR** (MJ m⁻² d⁻¹) as radiation driver.  
-> - If your code feeds **global shortwave radiation (Rs)** instead, use approximately  
+> - If your code feeds **global shortwave radiation (Rs)** instead, use approximately, the code pipeline already does this conversion.  
 >   `RUE_ol_Rs ≈ RUE_ol_PAR × 0.48` (PAR ≈ 0.48·Rs in many agro-meteorological applications).
 
 ```jsonc
@@ -39,11 +39,11 @@ Each updated item keeps the **original value** and includes a **validation sourc
                                   // updated: 0.86 g DM / MJ intercepted PAR
                                   // source: Villalobos et al. (2006) – abstract reports RUE≈0.86 g DM MJ⁻¹ PAR (Eur. J. Agron. 24:296–303; DOI: 10.1016/j.eja.2005.07.002)
 
-  "SLA_ol": 5.2,                   // original: 5.2 (m²/kg)        | keep: plausible olive SLA; calibrate if leaf traits measured
+  "SLA_ol": 4.2,                   // original: 5.2 (m²/kg)        | updated: plausible olive SLA; source: Villalobos et al. (2006)
 
   "HI_pot_base": 0.50,             // original: 0.35
                                   // updated: 0.50 (unitless)
-                                  // source: adult olive HI≈0.50 used/assumed in modeling literature citing Villalobos et al. (2006) (e.g., Frontiers in Sustainable Food Systems, 2024)
+                                  // source: adult olive HI≈0.50 used/assumed in modeling literature citing Villalobos et al. (2006) (e.g., Frontiers in Sustainable Food Systems, 2024) also in source: Villalobos et al. (2006)
 
   "harvest_doy": 120,              // original: 120                 | keep: site/cultivar dependent (Talca: calibrate using local harvest records)
   "PClf_pot_base": 0.18,           // original: 0.18                | keep: model-calibrated partition coefficient
