@@ -104,13 +104,8 @@ class OliveHarvestModel_ServiceLevel:
 
         # Aggregate mu and sigma (service level RHS)
 
-        print(len(self.J))
-        print(len(self.mu))
 
         mu_agg = sum(self.mu[j-1] for j in self.J)
-
-        print(len(self.J))
-        print(len(self.sigma))
 
         sigma_agg = math.sqrt(sum((self.sigma[j-1] ** 2) for j in self.J))  # independence assumption
 
@@ -124,8 +119,8 @@ class OliveHarvestModel_ServiceLevel:
 
         # Optional: shaker hours (if you want to keep the linearization style)
         # Only create if you actually use K2 constraints with hours.
-        if getattr(d, "HMB", 0.0) > 0 and self.K2:
-            self.h = pl.LpVariable.dicts("h", (self.J, self.T, self.K2), lowBound=0, cat="Continuous")
+        # if getattr(d, "HMB", 0.0) > 0 and self.K2:
+        #    self.h = pl.LpVariable.dicts("h", (self.J, self.T, self.K2), lowBound=0, cat="Continuous")
 
         # --------------------
         # Objective
@@ -139,23 +134,25 @@ class OliveHarvestModel_ServiceLevel:
         # Constraints
         # --------------------
 
+        
         # Initial stock: o[j,0] = mu[j] + z*sigma[j]
         for j in self.J:
             self.model += (
                 self.o[j][0] == self.mu[j-1] + z * self.sigma[j-1],
                 f"Initial_stock_service_{j}",
             )
-
+        
+        
         # Inventory balance with loss curve OL[j][t] from GP (Option A)
         for j in self.J:
             for i, t in enumerate(self.T):
                 prev = 0 if i == 0 else self.T[i - 1]
                 self.model += (
-                    self.o[j][prev] * (1.0 - d.OL[j][t]) - pl.lpSum(self.x[j][t][k] for k in self.K)
+                    self.o[j][prev] * (d.OL[j][t]) - pl.lpSum(self.x[j][t][k] for k in self.K)
                     == self.o[j][t],
                     f"InvBalance_{j}_{t}",
                 )
-
+        
         # Aggregate service-level constraint
         self.model += (
             pl.lpSum(self.x[j][t][k] for j in self.J for t in self.T for k in self.K)
@@ -171,7 +168,7 @@ class OliveHarvestModel_ServiceLevel:
         if getattr(d, "HMC", 0.0) > 0:
             self.model += (
                 pl.lpSum(
-                    self.x[j][t][k] * d.S[j] / d.mu[j]
+                    self.x[j][t][k]
                     for j in self.J if d.mu[j] != 0
                     for t in self.T
                     for k in self.K1
@@ -182,49 +179,32 @@ class OliveHarvestModel_ServiceLevel:
         # Shaker constraints: choose ONE of the two patterns below.
         # A) If you want "hours" variable h and productivity PD: x <= PD * h, plus sum(h) >= HMB
         if getattr(d, "HMB", 0.0) > 0:
-            if d.PD is None:
-                raise ValueError("HMB > 0 but Po/PD not provided in JSON.")
-            if self.h is None:
-                raise ValueError("Internal: h variables not created but HMB>0.")
-
-            # x <= PD * h  (only for k in K2)
-            for j in self.J:
-                for t in self.T:
-                    for k in self.K2:
-                        pd = d.PD[j][k]
-                        if pd <= 0:
-                            raise ValueError(f"PD must be > 0 for shaker constraint. Got PD[{j}][{k}]={pd}")
-                        self.model += (
-                            self.x[j][t][k] <= pd * self.h[j][t][k],
-                            f"Shaker_prod_{j}_{t}_{k}",
-                        )
-
-            # min hours
             self.model += (
-                pl.lpSum(self.h[j][t][k] for j in self.J for t in self.T for k in self.K2) >= d.HMB,
-                "Min_Shaker_hours",
+                pl.lpSum(self.x[j][t][k] for j in self.J for t in self.T for k in self.K2) >= d.HMB,
+                "Min_Shaker_tons",
             )
 
         # Minimum manual tonnage
         if getattr(d, "HMM", 0.0) > 0:
             self.model += (
                 pl.lpSum(self.x[j][t][k] for j in self.J for t in self.T for k in self.K4) >= d.HMM,
-                "Min_manual",
+                "Min_manual_tons",
             )
 
-        # Minimum fraction per lot (uses mu[j] as baseline)
-        for j in self.J:
-            if getattr(d, "F", {}).get(j, 0.0) > 0:
-                self.model += (
-                    pl.lpSum(self.x[j][t][k] for t in self.T for k in self.K)
-                    >= d.F[j] * d.mu[j],
-                    f"Fraction_{j}",
-                )
+        # Resource capacity: sum_j x[j,t,k] <= C[k]   for all t,k
+        # Requires: d.RC[k] defined for k in self.K
+        for t in self.T:
+            for k in self.K:
+                for j in self.J:
+                    self.model += (
+                        self.x[j][t][k] <= d.PD[j][k],
+                        f"ResCap_{k}_{t}_{j}",
+                    )
 
         # Plant capacity
         for t in self.T:
             self.model += (
-                pl.lpSum(self.x[j][t][k] for j in self.J for k in self.K) + d.OE[t]
+                pl.lpSum(self.x[j][t][k] for j in self.J for k in self.K)
                 <= d.CP[t],
                 f"PlantCap_{t}",
             )
