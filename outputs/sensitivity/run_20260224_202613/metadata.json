@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260224_202613",
+  "seed": 42,
+  "n_samples": 30,
+  "method": "all",
+  "target_column": "target_avg_yield_fresh_kg_ha",
+  "weather_csv": "C:\\Users\\LEONA\\Documents\\GitHub\\olive-oil-tactical-planning\\data\\data_20150630_to_20250630.csv",
+  "params_json": "C:\\Users\\LEONA\\Documents\\GitHub\\olive-oil-tactical-planning\\src\\biomassmodel\\params.json",
+  "yield_source": "C:\\Users\\LEONA\\Documents\\GitHub\\olive-oil-tactical-planning\\src\\biomassmodel\\yield_estimation.py",
+  "n_model_numeric_params": 38,
+  "n_valid_outputs": 30,
+  "n_failed_outputs": 0,
+  "git_commit": "cc6f10730ed24ee73811d6a80198465bfd232275"
+}

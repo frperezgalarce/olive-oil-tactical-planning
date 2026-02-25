@@ -1,127 +1,111 @@
-# Olive model parameter update (JSONC)
+# Olive model parameter update (JSONC) 
 
-This file provides an **updated parameter set** in JSON-with-comments format (JSONC).  
-Each updated item keeps the **original value** and includes a **validation source**.
+This document provides the active parameter set used by your pipeline, in JSON-with-comments (JSONC).
+Each parameter keeps the original value and clarifies whether it is (i) used by the Moriondo-style process model (phenology–canopy–water–yield) or (ii) used by the simplified yield proxy in `run_simple_model()` (CRUE/CHI/CCh-based).
 
-> **Important unit note (RUE):**
-> - `RUE_ol` is intended for **intercepted PAR** (MJ m⁻² d⁻¹) as radiation driver.  
-> - If your code feeds **global shortwave radiation (Rs)** instead, use approximately, the code pipeline already does this conversion.  
->   `RUE_ol_Rs ≈ RUE_ol_PAR × 0.48` (PAR ≈ 0.48·Rs in many agro-meteorological applications).
+> **Important consistency note (radiation driver):**
+>
+> * In the **Moriondo-style module**, biomass uses `DM_pot = Int_OT × RAD × RUE` (your `eq4_dm_pot`).
+> * In the **simplified yield proxy** (`run_simple_model`), daily yield uses `daily_yield = CCh × EF_t × min(FHeat, f_water)` where `CCh = CRUE × CHI`.
+>   These two pathways are **not interchangeable** unless you explicitly connect them in the code.
+
+---
 
 ```jsonc
 {
-  "PlantD": 1600.0,                // original: 1600.0 (plants/ha) | source: design input (orchard geometry)
-  "PlantA": 6.25,                  // original: 6.25 (m²/plant)    | derived: 10000/PlantD
-  "LAD": 2.0,                      // original: 2.0                | source: model calibration (site/canopy-specific)
-
-  "phenology_chill_model": "unichill",   // original: "unichill"  | source: modeling choice
-  "phenology_forcing_model": "logistic", // original: "logistic"  | source: modeling choice
-
-  "tb_budbreak": 8.5,              // original: 8.5 (°C)          | source: cultivar/site calibration (keep until local phenology fit)
-
-  "chill_a": 0.01,                 // original: 0.01              | source: chill model calibration (cultivar-specific)
-  "chill_b": -0.5,                 // original: -0.5              | source: chill model calibration (cultivar-specific)
-  "chill_c": 7.2,                  // original: 7.2               | source: chill model calibration (cultivar-specific)
-  "Ccrit": 350.0,                  // original: 350.0 (CU)         | source: chill requirement placeholder (cultivar-specific)
-
-  "forcing_d": 0.5,                // original: 0.5               | source: forcing model calibration (cultivar-specific)
-  "forcing_e": 9.0,                // original: 9.0               | source: forcing model calibration (cultivar-specific)
-  "FcritFlo": 450.0,               // original: 450.0 (GDD)         | source: forcing requirement placeholder (cultivar-specific)
-
-  "T_opt_chill_alt": 7.2,          // original: 7.2 (°C)           | source: chill response parameter (cultivar-specific)
-  "T_max_chill_alt": 16.0,         // original: 16.0 (°C)          | source: chill response parameter (cultivar-specific)
-  "Tb_forcing_alt": 9.0,           // original: 9.0 (°C)           | source: forcing base temperature (cultivar-specific)
+  // =========================
+  // Grove architecture
+  // =========================
+  "PlantD": 1600.0,                // original: 1600.0 (plants/ha) | pipeline: used in eq6_k_prime()
+  "PlantA": 6.25,                  // original: 6.25 (m²/plant)    | derived: 10000/PlantD (geometry helper; not directly used if LAI_ini is set)
+  "LAD": 2.0,                      // original: 2.0                | pipeline: used in eq6_k_prime(), eq7_v_from_lai()
 
   // =========================
-  // Yield / biomass parameters
+  // Phenology (paper-style)
   // =========================
-  "RUE_ol": 0.86,                  // original: 0.98
-                                  // updated: 0.86 g DM / MJ intercepted PAR
-                                  // source: Villalobos et al. (2006) – abstract reports RUE≈0.86 g DM MJ⁻¹ PAR (Eur. J. Agron. 24:296–303; DOI: 10.1016/j.eja.2005.07.002)
+  "phenology_chill_model": "unichill",   // original: "unichill"  | pipeline: uses eq2_unichill()
+  "phenology_forcing_model": "logistic", // original: "logistic"  | pipeline: uses eq3_forcing_logistic()
 
-  "SLA_ol": 4.2,                   // original: 5.2 (m²/kg)        | updated: plausible olive SLA; source: Villalobos et al. (2006)
+  "tb_budbreak": 8.5,              // original: 8.5 (°C)          | pipeline: budbreak GDH base temp (kept as in paper calibration narrative) :contentReference[oaicite:0]{index=0}
 
-  "HI_pot_base": 0.50,             // original: 0.35
-                                  // updated: 0.50 (unitless)
-                                  // source: adult olive HI≈0.50 used/assumed in modeling literature citing Villalobos et al. (2006) (e.g., Frontiers in Sustainable Food Systems, 2024) also in source: Villalobos et al. (2006)
+  "chill_a": 0.01,                 // original: 0.01              | pipeline: eq2_unichill()
+  "chill_b": -0.5,                 // original: -0.5              | pipeline: eq2_unichill()
+  "chill_c": 7.2,                  // original: 7.2               | pipeline: eq2_unichill()
+  "Ccrit": 350.0,                  // original: 350.0 (CU)         | pipeline: chill threshold (cultivar/site calibration placeholder)
 
-  "harvest_doy": 120,              // original: 120                 | keep: site/cultivar dependent (Talca: calibrate using local harvest records)
-  "PClf_pot_base": 0.18,           // original: 0.18                | keep: model-calibrated partition coefficient
+  "forcing_d": 0.5,                // original: 0.5               | pipeline: eq3_forcing_logistic()
+  "forcing_e": 9.0,                // original: 9.0               | pipeline: eq3_forcing_logistic()
+  "FcritFlo": 450.0,               // original: 450.0 (FU)         | pipeline: forcing threshold (cultivar/site calibration placeholder)
+
+  // Optional alternative phenology switches (implemented in code but not default)
+  "T_opt_chill_alt": 7.2,          // original: 7.2 (°C)           | pipeline: alt_chill_triangular() only if selected
+  "T_max_chill_alt": 16.0,         // original: 16.0 (°C)          | pipeline: alt_chill_triangular() only if selected
+  "Tb_forcing_alt": 9.0,           // original: 9.0 (°C)           | pipeline: alt_forcing_gdd() only if selected
+
+  // =========================
+  // Canopy / biomass (Moriondo-style path)
+  // =========================
+  "RUE_ol": 0.98,                  // original: 0.98               | pipeline default for eq4_dm_pot(); keep unless you explicitly rewire to CRUE
+  "SLA_ol": 5.2,                   // original: 5.2 (m²/kg)         | pipeline: used in eq8_lai_inc_pot()
+  "PClf_pot_base": 0.18,           // original: 0.18                | pipeline: leaf partition baseline for eq8_lai_inc_pot()
+
+  // =========================
+  // Harvest index + harvest timing (Moriondo-style path)
+  // =========================
+  "HI_pot_base": 0.35,             // original: 0.35                | pipeline: matches paper “unstressed value (0.35)” :contentReference[oaicite:1]{index=1}
+  "harvest_doy": 120,              // original: 120                 | pipeline: harvest stop day-of-year (site/cultivar calibration)
 
   // =========================================
-  // Canopy light extinction (retain; validated)
+  // Canopy light extinction k' (paper-style)
   // =========================================
-  "Ck1": 0.52,                     // original: 0.52               | source: Villalobos-type k' parameterization (see Moriondo et al., 2019, citing Villalobos et al.)
-  "Ck2": 0.000788,                 // original: 0.000788           | source: same as above
-  "Ck3": 0.76,                     // original: 0.76               | source: same as above
-  "Ck4": 1.25,                     // original: 1.25               | source: same as above
+  "Ck1": 0.52,                     // original: 0.52                | pipeline: eq6_k_prime()
+  "Ck2": 0.000788,                 // original: 0.000788            | pipeline: eq6_k_prime()
+  "Ck3": 0.76,                     // original: 0.76                | pipeline: eq6_k_prime()
+  "Ck4": 1.25,                     // original: 1.25                | pipeline: eq6_k_prime()
 
   // ======================
-  // Soil water (TAW split)
+  // Soil water (two layers)
   // ======================
-  "TTSW1": 62.0,                   // original: 70.0
-                                  // updated: 62.0 (mm)
-                                  // rationale: rescaled so (TTSW1+TTSW2)=160 mm to match TAW used in your parameter notes
+  "TTSW1": 70.0,                   // original: 70.0 (mm)           | pipeline: eq17_ttsw(), eq18_19_recharge()
+  "TTSW2": 110.0,                  // original: 110.0 (mm)          | pipeline: eq17_ttsw(), eq18_19_recharge()
+  "Initial_Saturation": 0.9,       // original: 0.9                | pipeline: initial condition (ATSW fractions)
 
-  "TTSW2": 98.0,                   // original: 110.0
-                                  // updated: 98.0 (mm)
-                                  // rationale: rescaled so (TTSW1+TTSW2)=160 mm to match TAW used in your parameter notes
-
-  "Initial_Saturation": 0.9,       // original: 0.9                | initial condition (field-capacity assumption)
-
-  "root_frac_layer1": 0.60,        // original: 0.3333333333333333
-                                  // updated: 0.60 (top layer share)
-                                  // source: olive root activity typically concentrates in upper soil under drip irrigation; validate with Fernández et al. (1991) Plant and Soil 133:239–251 (root distribution under drip)
-
-  "root_frac_layer2": 0.40,        // original: 0.6666666666666666
-                                  // updated: 0.40 (bottom layer share)
-                                  // source: see above
+  "root_frac_layer1": 0.3333333333333333, // original: 0.3333333333333333 | pipeline: available for Eq.30–31 style partitioning if activated
+  "root_frac_layer2": 0.6666666666666666, // original: 0.6666666666666666 | pipeline: available for Eq.30–31 style partitioning if activated
 
   // ==================================
-  // Stress-response shape (calibrated)
+  // Water-stress response (paper-style)
   // ==================================
-  "RelTr_a": 6.17,                 // original: 6.17               | keep: calibrated
-  "RelTr_b": 13.45,                // original: 13.45              | keep: calibrated
-  "RelLAI_a": 78.24,               // original: 78.24              | keep: calibrated
-  "RelLAI_b": 21.42,               // original: 21.42              | keep: calibrated
+  "RelTr_a": 6.17,                 // original: 6.17               | pipeline: eq22_rel_factor() for transpiration
+  "RelTr_b": 13.45,                // original: 13.45              | pipeline: eq22_rel_factor() for transpiration
+  "RelLAI_a": 78.24,               // original: 78.24              | pipeline: eq22_rel_factor() for LAI growth
+  "RelLAI_b": 21.42,               // original: 21.42              | pipeline: eq22_rel_factor() for LAI growth
 
-  "TE_coeff": 4.0,                 // original: 4.0                | keep: acceptable; optional literature default often ~5.0 Pa (Tanner & Sinclair theory)
+  "TE_coeff": 4.0,                 // original: 4.0                | pipeline: used as Kd (see eq16_te()) if that TE block is executed
 
   // =====================
   // Irrigation management
   // =====================
-  "Irrigation_Threshold": 0.35,    // original: 0.2
-                                  // updated: 0.35 (fraction of TAW remaining)
-                                  // rationale: aligns with p≈0.65 for olives (irrigate near 65% depletion => ~35% remaining)
-                                  // source: FAO-56 indicates p≈0.65 for olives (Table of rooting depth & p)
-
-  "Irrigation_Efficiency": 0.95,   // original: 0.95               | keep: well-managed drip assumption
+  "Irrigation_Threshold": 0.2,     // original: 0.2                | pipeline NOTE: run_simple_model() currently ignores this key
+  "Irrigation_Efficiency": 0.95,   // original: 0.95               | pipeline: management assumption (apply when you implement Ir with efficiency)
 
   // =========================
-  // ET0 / radiation constants
+  // ET / soil evaporation block
   // =========================
-  "SALB": 0.2,                     // original: 0.2                | keep: typical soil albedo assumption
-
-  "gamma_kpa": 0.067,              // original: 0.68
-                                  // updated: 0.067 (kPa/°C)
-                                  // source: FAO-56 psychrometric constant γ ≈ 0.665×10⁻³·P; at ~101 kPa => ~0.067 kPa/°C
+  "SALB": 0.2,                     // original: 0.2                | pipeline: eq32_sevp_pot()
+  "gamma_kpa": 0.68,               // original: 0.68               | pipeline: matches Eq.(32) denominator term “... + 0.68” in the paper :contentReference[oaicite:2]{index=2}
 
   // =======================
   // Yield stress thresholds
   // =======================
-  "FTSWo": 0.4,                    // original: 0.4                | keep: calibrated threshold
-  "FTSWm": 0.05,                   // original: 0.05               | keep: calibrated threshold
-  "TMAXo": 30.0,                   // original: 30.0               | keep: calibrated threshold
-  "TMAXm": 40.0,                   // original: 40.0               | keep: calibrated threshold
+  "FTSWo": 0.4,                    // original: 0.4                | pipeline: Eq.(35) “FTSWo is 0.4” :contentReference[oaicite:3]{index=3}
+  "FTSWm": 0.05,                   // original: 0.05               | pipeline: lower bound in code for HIws (kept)
+  "TMAXo": 30.0,                   // original: 30.0               | pipeline: Eq.(36) threshold “higher than 30°C (TMAXo)” :contentReference[oaicite:4]{index=4}
+  "TMAXm": 40.0,                   // original: 40.0               | pipeline: Eq.(36) “TMaxm = 40°C” :contentReference[oaicite:5]{index=5}
 
-  "anthesis_window_days": 7,       // original: 7                  | keep: simplifying assumption
-  "fresh_factor": 2.2,             // original: 2.2                | keep: moisture conversion (fresh/dry)
-  "LAI_ini": 3.5                   // original: 3.5                | keep: initial canopy state (site-specific)
+  "anthesis_window_days": 7,       // original: 7                  | pipeline: used to average around anthesis
+  "fresh_factor": 2.2,             // original: 2.2                | pipeline: conversion factor (fresh/dry), if used downstream
+  "LAI_ini": 3.5                   // original: 3.5                | pipeline: initial canopy state
 }
 ```
 
-## Validation links (quick access)
-- Villalobos et al. (2006), *European Journal of Agronomy* 24:296–303. DOI: 10.1016/j.eja.2005.07.002  
-- FAO-56 (Allen et al., 1998), *Crop Evapotranspiration*. (psychrometric constant γ; olives p≈0.65)  
-- Fernández et al. (1991), *Plant and Soil* 133:239–251. (olive root distribution under drip)  
-- Moriondo et al. (2019), *European Journal of Agronomy*. (k' parameterization with Ck1–Ck4 values)

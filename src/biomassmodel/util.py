@@ -80,15 +80,38 @@ Textreme = 45
 # [°C] Temperature at which growth stops (hard cutoff in model)
 # Updated: 45 (orig: 45; kept)
 # Validation: agronomic/technical references describe severe impairment at >40°C and extreme conditions approaching ~45°C.
-#   Olive4Climate (technical handbook): https://www.olive4climate.eu/wp-content/uploads/2019/06/Handbook-Changes-in-growing-conditions.pdf
+#   Olive4Climate (technical handbook): https://olive4climate.eu/wp-content/uploads/Olive4Climate-Handbook-_ENG.pdf
 
 
 # --- Water & Soil ---
-Swater = 0.6
-# [unitless] RUE sensitivity to drought (model stress-shape parameter)
-# Updated: 0.6 (orig: 0.6; kept)
-# Validation: not a FAO fixed constant; calibrate against local yield/biomass vs water-stress data.
-# Useful background on olive yield response to water deficits: Moriana et al. (2003), JASHS 128:425–431
+Swater = 0.35
+# [unitless] Approx. olive drought-stress sensitivity threshold (FTSW-based surrogate for simple models)
+# Updated: 0.35 (orig: 0.6; replaced)
+# Rationale:
+#   Derived from Moriondo et al. (2019) olive water-stress response function (Eq. 22):
+#     Rel = 1 / (1 + a * exp(-b * FTSW))
+#   using olive-specific parameters for:
+#     - transpiration (RelTr): a=6.17, b=13.45
+#     - leaf area growth (RelLAI): a=78.24, b=21.42
+#   and defining "stress onset" as ~5% reduction from potential (Rel = 0.95).
+#   Solving Eq. 22 for FTSW gives:
+#     FTSW = -(1/b) * ln(((1/Rel) - 1) / a)
+#   Results:
+#     FTSW_onset(RelTr, 0.95)  ≈ 0.354
+#     FTSW_onset(RelLAI, 0.95) ≈ 0.341
+#     Mean onset threshold      ≈ 0.348 -> use 0.35
+#
+# Validation:
+#   Not a FAO fixed constant; use as a literature-based default and calibrate with local biomass/yield vs soil-water data.
+#   If your model supports a 2-parameter stress curve, prefer the original (a,b) parameters instead of a single Swater.
+#
+# Sources:
+#   Moriondo et al. (2019), Eur. J. Agron. 105:129–145 (olive FTSW stress equation/parameters)
+#   https://doi.org/10.1016/j.eja.2019.02.002
+#   PDF mirror: https://webibe.ibe.cnr.it/IBE/personale/cantini-claudio/copie-delle-pubblicazioni/european-journal-of-agronomy-105-2019-1292013145.pdf
+#
+# Useful background on olive yield response to water deficits:
+#   Moriana et al. (2003), JASHS 128:425–431
 #   https://journals.ashs.org/downloadpdf/view/journals/jashs/128/3/article-p425.pdf
 
 critical_water = 160
